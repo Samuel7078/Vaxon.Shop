@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma Admin | Control de Seguridad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-50 font-sans overflow-x-hidden">
+
+    <div id="admin-login" class="fixed inset-0 bg-black z-[200] flex items-center justify-center">
+        <div class="bg-white p-12 rounded-[3.5rem] w-full max-w-sm text-center shadow-2xl animate-fade">
+            <div class="w-16 h-16 bg-black text-white rounded-2xl flex items-center justify-center mx-auto mb-8 rotate-12">
+                <i class="fa-solid fa-shield-halved text-2xl"></i>
+            </div>
+            <h2 class="text-xl font-black uppercase tracking-tighter mb-2">Panel de Control</h2>
+            <p class="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-8">Gestión de Acceso Seguro</p>
+            
+            <div class="relative mb-6">
+                <input type="password" id="admin-pass" placeholder="Contraseña Maestra" 
+                    class="w-full p-5 bg-gray-50 rounded-2xl outline-none border-2 border-transparent focus:border-black transition-all text-center font-bold">
+            </div>
+
+            <div class="flex items-center gap-3 mb-8 justify-center">
+                <input type="checkbox" id="remember-me" class="w-4 h-4 accent-black cursor-pointer">
+                <label for="remember-me" class="text-[9px] font-black uppercase opacity-40 cursor-pointer select-none tracking-widest">Mantener sesión iniciada</label>
+            </div>
+            
+            <button onclick="checkAdminLogin()" 
+                class="w-full bg-black text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] hover:scale-[1.02] active:scale-95 transition-all shadow-xl">
+                Verificar Identidad
+            </button>
+        </div>
+    </div>
+
+    <div id="admin-content" class="hidden flex min-h-screen">
+        
+        <aside class="w-72 bg-black text-white p-10 flex flex-col fixed h-full shadow-2xl z-50">
+            <div class="mb-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-white text-black flex items-center justify-center font-black rounded-lg">E</div>
+                    <div>
+                        <h1 class="text-lg font-black uppercase tracking-tighter leading-none">EMMA <span class="font-light">ADMIN</span></h1>
+                        <p class="text-[8px] font-bold opacity-40 tracking-[0.3em] mt-1">DASHBOARD PROFESIONAL</p>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="flex-1 space-y-2">
+                <button onclick="setAdminView('products')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all">
+                    <i class="fa-solid fa-box text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Artículos</span>
+                </button>
+                
+                <button onclick="setAdminView('categories')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all opacity-40 hover:opacity-100">
+                    <i class="fa-solid fa-tags text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Categorías</span>
+                </button>
+                
+                <button onclick="setAdminView('stories')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all opacity-40 hover:opacity-100">
+                    <i class="fa-solid fa-bolt text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Stories</span>
+                </button>
+                
+                <button onclick="setAdminView('team')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all opacity-40 hover:opacity-100">
+                    <i class="fa-solid fa-users text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Equipo</span>
+                </button>
+                
+                <button onclick="setAdminView('logs')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all opacity-40 hover:opacity-100">
+                    <i class="fa-solid fa-list-check text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Historial</span>
+                </button>
+
+                <button onclick="setAdminView('settings')" class="admin-nav-item w-full flex items-center gap-4 py-4 px-6 rounded-2xl transition-all opacity-40 hover:opacity-100">
+                    <i class="fa-solid fa-gear text-xs"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest">Ajustes</span>
+                </button>
+            </nav>
+
+            <div class="pt-10 border-t border-white/10">
+                <button onclick="logoutAdmin()" class="flex items-center gap-4 text-red-400 hover:text-red-300 transition-colors group">
+                    <i class="fa-solid fa-power-off text-xs group-hover:rotate-90 transition-transform duration-500"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <main id="admin-main" class="ml-72 flex-1 p-16 bg-gray-50">
+            <div class="flex items-center justify-center h-full">
+                <div class="text-center opacity-20">
+                    <i class="fa-solid fa-circle-notch animate-spin text-4xl mb-4"></i>
+                    <p class="text-[10px] font-black uppercase tracking-widest">Sincronizando con Aiven MySQL...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
