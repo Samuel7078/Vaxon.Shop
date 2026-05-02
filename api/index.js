@@ -1,5 +1,5 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const cors = require('cors');
 const crypto = require('crypto');
 const cloudinary = require('cloudinary').v2;
@@ -19,22 +19,15 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const dbConfig = {
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: parseInt(process.env.DB_PORT),
-    ssl: { rejectUnauthorized: false },
-    waitForConnections: true,
-    connectionLimit: 10
-};
-
-const pool = mysql.createPool(dbConfig);
+// --- CONFIGURACIÓN POSTGRESQL (SUPABASE) ---
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
 
 // --- HELPERS: IMÁGENES Y SEGURIDAD ---
 
-async function uploadToCloudinary(images, folder) {
+async function uploadToCloudinary(images, folder = 'vaxon') {
     const urls = [];
     if (!images || !Array.isArray(images)) return urls;
 
@@ -66,8 +59,8 @@ async function createLog(action, detail) {
     try {
         const timestamp = new Date().toLocaleString('es-BO', { timeZone: 'America/La_Paz' });
         const rawTime = Date.now();
-        await pool.execute(
-            "INSERT INTO logs (action, detail, ip, timestamp, rawTime) VALUES (?, ?, ?, ?, ?)",
+        await pool.query(
+            'INSERT INTO logs (action, detail, ip, "timestamp", "rawTime") VALUES ($1, $2, $3, $4, $5)',
             [action, detail, 'ADMIN_PANEL', timestamp, rawTime]
         );
     } catch (err) { console.error("Error al crear log:", err); }
@@ -84,7 +77,7 @@ function hashPassword(password) {
 app.post('/api/login', async (req, res) => {
     const { password } = req.body;
     try {
-        const [rows] = await pool.query("SELECT password FROM admin_user WHERE username = 'admin'");
+        const { rows } = await pool.query("SELECT password FROM admin_user WHERE username = 'admin'");
         if (rows.length === 0) return res.status(404).json({ error: "Admin no configurado" });
 
         const [salt, storedHash] = rows[0].password.trim().split(':');
@@ -103,7 +96,7 @@ app.put('/api/admin/update-password', async (req, res) => {
     const { newPassword } = req.body;
     try {
         const newHashedValue = hashPassword(newPassword);
-        await pool.execute("UPDATE admin_user SET password = ? WHERE username = 'admin'", [newHashedValue]);
+        await pool.query("UPDATE admin_user SET password = $1 WHERE username = 'admin'", [newHashedValue]);
         await createLog("SEGURIDAD", "Cambio de contraseña maestra");
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -113,8 +106,9 @@ app.put('/api/admin/update-password', async (req, res) => {
 
 app.get('/api/products', async (req, res) => {
     try {
-        const [rows] = await pool.query("SELECT * FROM products ORDER BY id DESC");
-        res.json(rows.map(p => ({ ...p, images: JSON.parse(p.images || "[]") })));
+        const { rows } = await pool.query("SELECT * FROM products ORDER BY id DESC");
+        // En PostgreSQL con JSONB, images ya viene como objeto, no hace falta parsear
+        res.json(rows.map(p => ({ ...p, images: typeof p.images === 'string' ? JSON.parse(p.images) : (p.images || []) })));
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -123,7 +117,8 @@ app.post('/api/products', async (req, res) => {
     try {
         const cloudinaryUrls = await uploadToCloudinary(images, 'products');
         
-        const values = [
+        const sql = `INSERT INTO products (name, price, description, images, "categoryId", "contactId", "whatsappCustomMsg") VALUES ($1,$2,$3,$4,$5,$6,$7)`;
+        await pool.query(sql, [
             name || null,
             price || 0,
             description || null,
@@ -131,10 +126,7 @@ app.post('/api/products', async (req, res) => {
             categoryId || null,
             contactId || null,
             whatsappCustomMsg || ""
-        ];
-
-        const sql = "INSERT INTO products (name, price, description, images, categoryId, contactId, whatsappCustomMsg) VALUES (?,?,?,?,?,?,?)";
-        await pool.execute(sql, values);
+        ]);
         
         await createLog("CREAR_PRODUCTO", `Producto: ${name}`);
         res.json({ success: true });
@@ -146,11 +138,10 @@ app.post('/api/products', async (req, res) => {
 app.put('/api/products/:id', async (req, res) => {
     const { name, price, description, images, categoryId, contactId, whatsappCustomMsg } = req.body;
     try {
-        // CORRECCIÓN: Se usa la función helper correcta
         const cloudinaryUrls = await uploadToCloudinary(images, 'products');
         
-        const sql = "UPDATE products SET name=?, price=?, description=?, images=?, categoryId=?, contactId=?, whatsappCustomMsg=? WHERE id=?";
-        await pool.execute(sql, [name, price, description, JSON.stringify(cloudinaryUrls), categoryId, contactId, whatsappCustomMsg, req.params.id]);
+        const sql = `UPDATE products SET name=$1, price=$2, description=$3, images=$4, "categoryId"=$5, "contactId"=$6, "whatsappCustomMsg"=$7 WHERE id=$8`;
+        await pool.query(sql, [name, price, description, JSON.stringify(cloudinaryUrls), categoryId, contactId, whatsappCustomMsg, req.params.id]);
         
         await createLog("EDITAR_PRODUCTO", `ID: ${req.params.id}`);
         res.json({ success: true });
@@ -160,51 +151,49 @@ app.put('/api/products/:id', async (req, res) => {
 // --- ENDPOINTS DE CATEGORÍAS Y EQUIPO ---
 
 app.get('/api/categories', async (req, res) => {
-    try { const [rows] = await pool.query("SELECT * FROM categories"); res.json(rows); }
+    try { const { rows } = await pool.query("SELECT * FROM categories"); res.json(rows); }
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/categories', async (req, res) => {
     try {
-        await pool.execute("INSERT INTO categories (name) VALUES (?)", [req.body.name]);
+        await pool.query("INSERT INTO categories (name) VALUES ($1)", [req.body.name]);
         await createLog("CATEGORIA", req.body.name);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/contacts', async (req, res) => {
-    try { const [rows] = await pool.query("SELECT * FROM contacts"); res.json(rows); }
+    try { const { rows } = await pool.query("SELECT * FROM contacts"); res.json(rows); }
     catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/contacts', async (req, res) => {
     try {
-        await pool.execute("INSERT INTO contacts (name, number) VALUES (?, ?)", [req.body.name, req.body.number]);
+        await pool.query("INSERT INTO contacts (name, number) VALUES ($1, $2)", [req.body.name, req.body.number]);
         await createLog("VENDEDOR", req.body.name);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- STORIES (SOPORTE MÚLTIPLE E IGUAL QUE PRODUCTOS) ---
+// --- STORIES ---
 
 app.get('/api/stories', async (req, res) => {
     try {
         const limit24h = Date.now() - (24 * 60 * 60 * 1000);
-        const [rows] = await pool.query("SELECT * FROM stories WHERE createdAt > ? ORDER BY id DESC", [limit24h]);
+        const { rows } = await pool.query('SELECT * FROM stories WHERE "createdAt" > $1 ORDER BY id DESC', [limit24h]);
         res.json(rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/stories', async (req, res) => {
-    // CORRECCIÓN: Ahora acepta un array de imágenes igual que productos
     const { images, contactId, customMsg } = req.body;
     try {
         const uploaded = await uploadToCloudinary(images, 'stories');
         
-        // Insertamos cada imagen como una story individual
         for (const url of uploaded) {
-            await pool.execute(
-                "INSERT INTO stories (imageUrl, contactId, customMsg, createdAt) VALUES (?,?,?,?)",
+            await pool.query(
+                'INSERT INTO stories ("imageUrl", "contactId", "customMsg", "createdAt") VALUES ($1,$2,$3,$4)',
                 [url, contactId, customMsg || "", Date.now()]
             );
         }
@@ -220,7 +209,7 @@ app.post('/api/stories', async (req, res) => {
 
 app.get('/api/logs', async (req, res) => {
     try {
-        const [rows] = await pool.query("SELECT * FROM logs ORDER BY rawTime DESC LIMIT 100");
+        const { rows } = await pool.query('SELECT * FROM logs ORDER BY "rawTime" DESC LIMIT 100');
         res.json(rows);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -229,7 +218,7 @@ app.delete('/api/:table/:id', async (req, res) => {
     try {
         const allowed = ['products', 'categories', 'contacts', 'stories'];
         if (!allowed.includes(req.params.table)) return res.status(400).send("No permitido");
-        await pool.execute(`DELETE FROM ${req.params.table} WHERE id = ?`, [req.params.id]);
+        await pool.query(`DELETE FROM ${req.params.table} WHERE id = $1`, [req.params.id]);
         await createLog("ELIMINAR", `${req.params.table} ID: ${req.params.id}`);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }

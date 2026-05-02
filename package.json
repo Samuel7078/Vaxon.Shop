@@ -1,5 +1,5 @@
 {
-  "name": "emma-store-vercel",
+  "name": "vaxon-catalog",
   "version": "1.0.0",
   "main": "api/index.js",
   "dependencies": {
@@ -9,6 +9,6 @@
     "crypto": "^1.0.1",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
-    "mysql2": "^3.17.1"
+    "pg": "^8.13.0"
   }
 }
